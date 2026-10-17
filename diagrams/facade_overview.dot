@@ -1,0 +1,64 @@
+digraph FacadeOverview {
+    rankdir=TB;
+    bgcolor="white";
+    fontname="Helvetica";
+    node [fontname="Helvetica", fontsize=11, shape=record, style=filled, fillcolor="#F5F7FA", color="#333333"];
+    edge [fontname="Helvetica", fontsize=10, color="#333333"];
+
+    Client [label="{GreenhouseApp\n(Client / CLI)|+main() void\l}", fillcolor="#FFF3D6"];
+
+    CycleFacade [label="{GreenhouseCycleFacade|+runCycle(zoneId, moisture, humidity, nutrient) CycleRecord\l}", fillcolor="#E8F0FE"];
+    AdminFacade [label="{GreenhouseAdminFacade|+listAllCycles() List\<CycleRecord\>\l+inspect(cycleId) CycleRecord\l+manuallyCompensate(cycleId) CycleRecord\l}", fillcolor="#E8F0FE"];
+
+    ChainRecord [label="{CycleRecord\n(chain progress)|status : PENDING_B|PENDING_C|COMPLETED|\lCOMPENSATED_AFTER_B|COMPENSATED_AFTER_C\l}", fillcolor="#FBEAEA"];
+
+    subgraph cluster_A {
+        label = "Subsystem A -- Intake";
+        style = dashed; color="#888888"; fontname="Helvetica";
+        IntakeService [label="{IntakeService}"];
+        MoistureEvaluator [label="{MoistureEvaluator\n(business logic)}"];
+        IrrigationSchedule [label="{IrrigationSchedule\n(entity)|status: NEW\|SCHEDULED\|CANCELLED\l}"];
+        ScheduleRepository [label="{ScheduleRepository\n(persistence gateway)}"];
+        IntakeService -> MoistureEvaluator;
+        IntakeService -> IrrigationSchedule;
+        IntakeService -> ScheduleRepository;
+    }
+
+    subgraph cluster_B {
+        label = "Subsystem B -- Processing";
+        style = dashed; color="#888888"; fontname="Helvetica";
+        ProcessingService [label="{ProcessingService}"];
+        VentilationSafetyChecker [label="{VentilationSafetyChecker\n(business logic)}"];
+        IrrigationExecution [label="{IrrigationExecution\n(entity)|status: PENDING\|EXECUTED\|FAILED\|REVERSED\l}"];
+        ExecutionRepository [label="{ExecutionRepository\n(persistence gateway)}"];
+        ProcessingService -> VentilationSafetyChecker;
+        ProcessingService -> IrrigationExecution;
+        ProcessingService -> ExecutionRepository;
+    }
+
+    subgraph cluster_C {
+        label = "Subsystem C -- Finalization";
+        style = dashed; color="#888888"; fontname="Helvetica";
+        FinalizationService [label="{FinalizationService}"];
+        NutrientLevelValidator [label="{NutrientLevelValidator\n(business logic)}"];
+        NutrientDispense [label="{NutrientDispense\n(entity)|status: PENDING\|CONFIRMED\|CANCELLED\l}"];
+        DispenseRepository [label="{DispenseRepository\n(persistence gateway)}"];
+        FinalizationService -> NutrientLevelValidator;
+        FinalizationService -> NutrientDispense;
+        FinalizationService -> DispenseRepository;
+    }
+
+    Client -> CycleFacade [label="uses"];
+    Client -> AdminFacade [label="uses"];
+
+    CycleFacade -> IntakeService [label="1: intake()"];
+    CycleFacade -> ProcessingService [label="2: process()"];
+    CycleFacade -> FinalizationService [label="3: finalizeCycle()"];
+    CycleFacade -> ChainRecord [label="persists progress"];
+
+    AdminFacade -> IntakeService [label="cancel() (compensate A)"];
+    AdminFacade -> ProcessingService [label="reverse() (compensate B)"];
+    AdminFacade -> ChainRecord [label="reads / updates"];
+
+    { rank=same; IntakeService; ProcessingService; FinalizationService; }
+}
